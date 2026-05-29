@@ -81,10 +81,11 @@
         minPlayers: saved.minPlayers ?? 1,
         maxPlayers: saved.maxPlayers ?? 6,
         minTime: saved.minTime ?? 90, // seconds remaining
+        maxPing: saved.maxPing ?? 120, // max server ping
+        maxServersShown: saved.maxServersShown ?? 10, // max lobbies rendered (2-20)
         keybind: saved.keybind || "KeyF6", // Matchmaker Hotkey
         cancelKeybind: saved.cancelKeybind || "Escape", // Matchmaker Cancel
         openServerBrowser: saved.openServerBrowser ?? true,
-        sortByPlayers: saved.sortByPlayers ?? false,
         filterAutoJoin: saved.filterAutoJoin ?? false,
         filterAvoidCloseToFull: saved.filterAvoidCloseToFull ?? false,
 
@@ -639,24 +640,13 @@
         return entry;
     }
 
-    // Sorting algorithm (ping-first or player count-first)
-    function sortLobbies(lobbies, pings, sortByPlayers) {
+    // Sorting algorithm (ping-first)
+    function sortLobbies(lobbies, pings) {
         return lobbies.sort((a, b) => {
-            if (sortByPlayers) {
-                // Primary: highest player count
-                if (a.playerCount !== b.playerCount) return b.playerCount - a.playerCount;
-                // Secondary: lowest ping
-                const pingA = pings[a.region] ?? 999;
-                const pingB = pings[b.region] ?? 999;
-                return pingA - pingB;
-            } else {
-                // Primary: lowest ping
-                const pingA = pings[a.region] ?? 999;
-                const pingB = pings[b.region] ?? 999;
-                if (pingA !== pingB) return pingA - pingB;
-                // Secondary: highest player count
-                return b.playerCount - a.playerCount;
-            }
+            const pingA = pings[a.region] ?? 999;
+            const pingB = pings[b.region] ?? 999;
+            if (pingA !== pingB) return pingA - pingB;
+            return b.playerCount - a.playerCount;
         });
     }
 
@@ -705,6 +695,10 @@
                 if (details.c !== 0) passesFilter = false;
                 if (window.location.href.includes(gameID)) passesFilter = false;
                 if (STATE.filterAvoidCloseToFull && (playerLimit - playerCount <= 1)) passesFilter = false;
+                
+                // Max Ping Filter check
+                const pingValue = pings[region] ?? 999;
+                if (pingValue > STATE.maxPing) passesFilter = false;
 
                 if (passesFilter) {
                     allMatching.push({
@@ -713,8 +707,8 @@
                 }
             }
 
-            // Sort by configured priority (ping vs players)
-            sortLobbies(allMatching, pings, STATE.sortByPlayers);
+            // Sort by configured priority (lowest ping first)
+            sortLobbies(allMatching, pings);
 
             if (allMatching.length > 0) {
                 searchStatus.textContent = "Scanning lobbies...";
@@ -742,8 +736,8 @@
                     await new Promise(r => setTimeout(r, 40));
                 }
 
-                // Discover target matching lobbies (up to 5)
-                const targetLobbies = allMatching.slice(0, 5);
+                // Discover target matching lobbies (up to maxServersShown)
+                const targetLobbies = allMatching.slice(0, STATE.maxServersShown);
                 for (const lobby of targetLobbies) {
                     if (searchCanceled) return;
 
@@ -846,7 +840,6 @@
                 }
                 html += `</div>`;
             };
-
             html += `
                 <div style="background:#0d0908; padding:15px; border-radius:4px; border:1px solid #231612; display: flex; flex-direction: column; gap: 8px;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -865,10 +858,6 @@
                         <span style="font-size:11px; font-weight:bold; color:#c2ada3; letter-spacing: 0.5px;">AVOID LOBBIES WITH 1 SLOT LEFT</span>
                         <button id="toggle_filter_avoid_full" style="padding:6px 12px; background:${STATE.filterAvoidCloseToFull ? 'linear-gradient(135deg, #d1001c 0%, #ff3b00 100%)' : '#1c1513'}; color:${STATE.filterAvoidCloseToFull ? '#fff' : '#7a6861'}; border:1px solid ${STATE.filterAvoidCloseToFull ? '#ff3b00' : '#362a26'}; border-radius:4px; font-weight:bold; font-size:10px; cursor:pointer; text-transform:uppercase; letter-spacing:0.5px; transition:0.2s; box-shadow:${STATE.filterAvoidCloseToFull ? '0 2px 6px rgba(255,59,0,0.25)' : 'none'};">${STATE.filterAvoidCloseToFull ? 'ON' : 'OFF'}</button>
                     </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:11px; font-weight:bold; color:#c2ada3; letter-spacing: 0.5px;">PRIORITIZE PLAYER COUNT</span>
-                        <button id="toggle_sort_priority" style="padding:6px 12px; background:${STATE.sortByPlayers ? 'linear-gradient(135deg, #d1001c 0%, #ff3b00 100%)' : '#1c1513'}; color:${STATE.sortByPlayers ? '#fff' : '#7a6861'}; border:1px solid ${STATE.sortByPlayers ? '#ff3b00' : '#362a26'}; border-radius:4px; font-weight:bold; font-size:10px; cursor:pointer; text-transform:uppercase; letter-spacing:0.5px; transition:0.2s; box-shadow:${STATE.sortByPlayers ? '0 2px 6px rgba(255,59,0,0.25)' : 'none'};">${STATE.sortByPlayers ? 'ON' : 'OFF'}</button>
-                    </div>
                 </div>
             `;
 
@@ -878,14 +867,32 @@
 
             html += `
                 <div style="background:#0d0908; padding:20px; border-radius:4px; margin-top:25px; border:1px solid #231612;">
-                    <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:12px; font-weight:bold; color:#c2ada3; letter-spacing:0.5px;">
-                        <span>MIN PLAYERS - <span id="l_minPlayers" style="color:#ff3b00; text-shadow:0 0 4px rgba(255,59,0,0.3);">${STATE.minPlayers}</span></span>
-                        <span>MAX PLAYERS - <span id="l_maxPlayers" style="color:#ff3b00; text-shadow:0 0 4px rgba(255,59,0,0.3);">${STATE.maxPlayers}</span></span>
-                        <span>MIN MATCH REMAINING - <span id="l_minTime" style="color:#ff3b00; text-shadow:0 0 4px rgba(255,59,0,0.3);">${STATE.minTime}</span>s</span>
+                    <div style="display:flex; flex-direction:column; gap:12px;">
+                        <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; color:#c2ada3; letter-spacing:0.5px;">
+                            <span>MIN PLAYERS - <span id="l_minPlayers" style="color:#ff3b00; text-shadow:0 0 4px rgba(255,59,0,0.3);">${STATE.minPlayers}</span></span>
+                        </div>
+                        <input type="range" class="s-input" data-k="minPlayers" min="0" max="7" value="${STATE.minPlayers}" style="width:100%; accent-color:#ff3b00; cursor:pointer; margin-bottom: 4px;">
+
+                        <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; color:#c2ada3; letter-spacing:0.5px;">
+                            <span>MAX PLAYERS - <span id="l_maxPlayers" style="color:#ff3b00; text-shadow:0 0 4px rgba(255,59,0,0.3);">${STATE.maxPlayers}</span></span>
+                        </div>
+                        <input type="range" class="s-input" data-k="maxPlayers" min="0" max="7" value="${STATE.maxPlayers}" style="width:100%; accent-color:#ff3b00; cursor:pointer; margin-bottom: 4px;">
+
+                        <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; color:#c2ada3; letter-spacing:0.5px;">
+                            <span>MIN MATCH REMAINING - <span id="l_minTime" style="color:#ff3b00; text-shadow:0 0 4px rgba(255,59,0,0.3);">${STATE.minTime}</span>s</span>
+                        </div>
+                        <input type="range" class="s-input" data-k="minTime" min="0" max="480" step="10" value="${STATE.minTime}" style="width:100%; accent-color:#ff3b00; cursor:pointer; margin-bottom: 4px;">
+
+                        <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; color:#c2ada3; letter-spacing:0.5px;">
+                            <span>MAX SERVER PING - <span id="l_maxPing" style="color:#ff3b00; text-shadow:0 0 4px rgba(255,59,0,0.3);">${STATE.maxPing}</span>ms</span>
+                        </div>
+                        <input type="range" class="s-input" data-k="maxPing" min="20" max="300" step="5" value="${STATE.maxPing}" style="width:100%; accent-color:#ff3b00; cursor:pointer; margin-bottom: 4px;">
+
+                        <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; color:#c2ada3; letter-spacing:0.5px;">
+                            <span>MAX SERVERS SHOWN - <span id="l_maxServersShown" style="color:#ff3b00; text-shadow:0 0 4px rgba(255,59,0,0.3);">${STATE.maxServersShown}</span></span>
+                        </div>
+                        <input type="range" class="s-input" data-k="maxServersShown" min="2" max="20" step="1" value="${STATE.maxServersShown}" style="width:100%; accent-color:#ff3b00; cursor:pointer;">
                     </div>
-                    <input type="range" class="s-input" data-k="minPlayers" min="0" max="7" value="${STATE.minPlayers}" style="width:100%; margin-bottom:12px; accent-color:#ff3b00; cursor:pointer;">
-                    <input type="range" class="s-input" data-k="maxPlayers" min="0" max="7" value="${STATE.maxPlayers}" style="width:100%; margin-bottom:12px; accent-color:#ff3b00; cursor:pointer;">
-                    <input type="range" class="s-input" data-k="minTime" min="0" max="480" step="10" value="${STATE.minTime}" style="width:100%; accent-color:#ff3b00; cursor:pointer;">
                 </div>
                 <button id="find_btn" style="width:100%; padding:18px; margin-top:20px; background:linear-gradient(135deg, #cc1111 0%, #ff3b00 50%, #ff7700 100%); color:#fff; border:none; border-radius:4px; font-weight:bold; font-size:17px; cursor:pointer; transition:0.2s; font-family:'Aldrich'; text-transform:uppercase; letter-spacing:2px; box-shadow: inset 0 -4px 0 #800000, 0 4px 15px rgba(255,59,0,0.35);">FIND GAME</button>
                 
@@ -924,7 +931,6 @@
         if (ui.querySelector("#toggle_browser_cancel")) ui.querySelector("#toggle_browser_cancel").onclick = () => { STATE.openServerBrowser = !STATE.openServerBrowser; saveState(); render(); };
         if (ui.querySelector("#toggle_filter_autojoin")) ui.querySelector("#toggle_filter_autojoin").onclick = () => { STATE.filterAutoJoin = !STATE.filterAutoJoin; saveState(); render(); };
         if (ui.querySelector("#toggle_filter_avoid_full")) ui.querySelector("#toggle_filter_avoid_full").onclick = () => { STATE.filterAvoidCloseToFull = !STATE.filterAvoidCloseToFull; saveState(); render(); };
-        if (ui.querySelector("#toggle_sort_priority")) ui.querySelector("#toggle_sort_priority").onclick = () => { STATE.sortByPlayers = !STATE.sortByPlayers; saveState(); render(); };
 
         if (ui.querySelector("#find_btn")) ui.querySelector("#find_btn").onclick = () => { toggleUI(false); triggerMatchmaker(); };
         if (ui.querySelector("#load_css_btn")) ui.querySelector("#load_css_btn").onclick = loadCSSFile;
@@ -979,7 +985,7 @@
 
         // Matchmaker Hotkey (F6 by default) triggers matchmaker
         if (STATE.keybind && e.code === STATE.keybind) {
-            if (document.activeElement.tagName !== "INPUT" && STATE.matchmakerEnabled) {
+            if (document.activeElement.tagName !== "INPUT") {
                 e.preventDefault();
                 triggerMatchmaker();
             }
