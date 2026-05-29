@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Turf Matchmaking
-// @version      1.0
+// @version      1.2
 // @description  Fast matchmaking optimized (Krunker Civilian model)
 // @author       Vixino
 // @match        *://krunker.io/*
@@ -851,10 +851,10 @@
     ui.onclick = (e) => {
         const target = e.target;
         if (target.id === "close_btn") { toggleUI(false); return; }
-        
+
         const tabBtn = target.closest('.tab-btn');
         if (tabBtn) { STATE.tab = tabBtn.dataset.t; render(); return; }
-        
+
         const mSelect = target.closest('.m-select');
         if (mSelect) {
             const k = mSelect.dataset.key;
@@ -876,7 +876,7 @@
             saveState();
             return;
         }
-        
+
         if (target.id === "toggle_browser_cancel") { STATE.openServerBrowser = !STATE.openServerBrowser; saveState(); render(); return; }
         if (target.id === "toggle_filter_autojoin") { STATE.filterAutoJoin = !STATE.filterAutoJoin; saveState(); render(); return; }
         if (target.id === "toggle_filter_avoid_full") { STATE.filterAvoidCloseToFull = !STATE.filterAvoidCloseToFull; saveState(); render(); return; }
@@ -888,7 +888,7 @@
         if (target.id === "cancel_kb_btn") { STATE.bindingCancel = true; target.textContent = "WAITING..."; return; }
         if (target.id === "reset_grad_btn") { applyTheme(DEFAULT_GRAD.c1, DEFAULT_GRAD.c2); saveState(); render(); return; }
         if (target.id === "toggle_gradient") { STATE.gradientEnabled = !STATE.gradientEnabled; applyTheme(STATE.gradColor1, STATE.gradColor2); saveState(); render(); return; }
-        
+
         const preset = target.closest('.grad-preset');
         if (preset) {
             const pr = GRAD_PRESETS[parseInt(preset.dataset.i)];
@@ -909,7 +909,7 @@
             if (label) label.textContent = val;
             return;
         }
-        
+
         const liveTheme = () => applyTheme(STATE.gradColor1, STATE.gradColor2);
         if (target.id === "grad1_picker") {
             STATE.gradColor1 = target.value;
