@@ -1201,7 +1201,7 @@
         setTimeout(checkIngameLoop, 250);
     }
 
-    const SCRIPT_VERSION = "1.1";
+    const SCRIPT_VERSION = "1.2";
 
     async function checkForUpdates() {
         try {
@@ -1211,7 +1211,7 @@
             const match = text.match(/@version\s+(\d+\.\d+)/);
             if (!match) return;
             const remoteVersion = match[1];
-            if (remoteVersion !== SCRIPT_VERSION) {
+            if (parseFloat(remoteVersion) > parseFloat(SCRIPT_VERSION)) {
                 showUpdatePopup(remoteVersion);
             }
         } catch (e) {
